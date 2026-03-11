@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/newrelic/go-agent/v3/integrations/nrredis-v9"
@@ -33,9 +34,16 @@ func New(cfg *config.Config, logger *zerolog.Logger, loggerService *loggerPkg.Lo
 	}
 
 	// Redis client with New Relic integration
-	redisClient := redis.NewClient(&redis.Options{
-		Addr: cfg.Redis.Address,
-	})
+	redisOpts := &redis.Options{Addr: cfg.Redis.Address}
+	if strings.Contains(cfg.Redis.Address, "://") {
+		parsedOpts, parseErr := redis.ParseURL(cfg.Redis.Address)
+		if parseErr != nil {
+			logger.Error().Err(parseErr).Str("redis_address", cfg.Redis.Address).Msg("invalid redis URI, falling back to raw address")
+		} else {
+			redisOpts = parsedOpts
+		}
+	}
+	redisClient := redis.NewClient(redisOpts)
 
 	// Add New Relic Redis hooks if available
 	if loggerService != nil && loggerService.GetApplication() != nil {
